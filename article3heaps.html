@@ -1,10 +1,283 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+  <title>Laurent Kloeble - Java Consultant - Article : 3 Memory Heaps increase</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
 </head>
-<body>
-$END$
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+  <!-- Header -->
+  <header id="header">
+    <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+    <nav>
+      <a href="#menu">Menu</a>
+    </nav>
+  </header>
+
+  <!-- Menu -->
+  <nav id="menu">
+    <div class="inner">
+      <h2>Menu</h2>
+      <ul class="links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="technical.html">Technical</a></li>
+        <li><a href="articles.html">Articles</a></li>
+      </ul>
+      <a href="#" class="close">Close</a>
+    </div>
+  </nav>
+
+  <!-- Wrapper -->
+  <section id="wrapper">
+    <header>
+      <div class="inner">
+        <h2>When the heap keeps growing, it’s not always a memory leak.</h2>
+        <p>
+
+          Seeing the heap grow in production is unsettling. The reflex is often immediate: “we probably have a memory leak.” Sometimes that’s true. Often, it’s not that simple.
+
+        </p>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="wrapper">
+      <div class="inner">
+
+        <p>
+
+
+          A growing heap is a <b>signal</b>.<br>
+          What matters is <b>what kind of signal</b>, and <b>over what time horizon</b>.<br>
+          <br>
+          🧩 In production Java systems, heap growth usually falls into one (or more) of three broad patterns.<br>
+          Each of them tells a very different story about the system.<br>
+
+          <hr>
+
+          <h3>#1 Warmup - growth as a normal phase of life</h3>
+
+          Heap growth during startup is often treated as a transient inconvenience.<br>
+          In reality, it is frequently a <b>designed phase</b> of the system.<br>
+        <br>
+          Modern Java applications rarely start “fully formed”. They warm up.<br>
+        <br>
+          Caches populate. <br>
+          Metadata loads.<br>
+          Code paths become hot.<br>
+          Lazy components are instantiated only when first needed.<br>
+        <br>
+          In large business monoliths, this warmup can be intentionally <b>stretched</b>.<br>
+        <br>
+          Architectural choices such as:<br>
+          <ul>
+          <li>deferred initialization,
+          <li>lazy-loading of heavy subsystems,
+          <li>progressive cache filling,
+          <li>staged activation of business features,
+          </ul>
+
+        can push the system’s <i>nominal</i> memory plateau far beyond the first few minutes.
+        <br>
+          In some environments, reaching steady state can take <b>tens of minutes</b> — sometimes <b>hours</b>.<br>
+          And that can be perfectly fine.<br>
+        <br>
+          ⚠️ The risk here is not technical. It’s organizational.<br>
+        <br>
+          If the team responsible for operations is used to applications that stabilize in two or three minutes, handing them a system whose heap reaches its plateau after two hours is a recipe for misunderstanding.<br>
+        <br>
+          Alerts fire.<br>
+          Restarts happen.<br>
+          “Well-intentioned” corrective actions are taken against a system that is behaving exactly as designed.<br>
+        <br>
+          This is not a JVM problem.<br>
+          It’s a <b>shared understanding problem</b>.<br>
+        <br>
+          A warmup strategy only works if it is <b>explicitly communicated</b> to the teams who monitor and operate the system.<br>
+
+          📊 **Graph placement — Warmup pattern**
+
+
+          <hr>
+
+        <h3> #2 Retained objects - when memory stops being released</h3>
+
+          Not everything in memory is meant to be collected quickly.<br>
+        <br>
+          Long-lived objects are a normal part of most systems:
+        <ul>
+        <li>active sessions,
+          <li>reference data,
+          <li>caches,
+          <li>compiled expressions,
+          <li>internal registries.
+        </ul>
+
+          The presence of such objects does **not** indicate a leak.<br>
+        <br>
+        The problem begins when objects that are <i>functionally releasable</i> are not released.<br>
+        <br>
+          This distinction matters.<br>
+        <br>
+          A memory leak in Java is rarely “an object that should not exist”.<br>
+          It is more often:
+          <ul>
+        <li>an object that <i>used to be relevant</i>,
+            <li>that has quietly outlived its usefulness,
+            <li>because something is still referencing it.
+          </ul>
+
+          The leak is frequently <b>indirect</b>.<br>
+        <br>
+          The retained object may be small.<br>
+          The structure holding onto it may look harmless.<br>
+          The functional code may have already moved on.<br>
+        <br>
+          From the outside, what you see is simple:<br>
+          the heap grows, and never quite settles.<br>
+        <br>
+          🧩 This is where many teams get stuck.<br>
+        <br>
+          The JVM keeps running.<br>
+          GC keeps working.<br>
+          Nothing crashes immediately.<br>
+        <br>
+          So the system is given more memory.<br>
+          Or restarted periodically.<br>
+        <br>
+          Both actions reduce pressure — without restoring understanding.<br>
+        <br>
+          📊 **Graph placement — Retention pattern**
+
+          <hr>
+
+        <h3>#3 Promotion storms - growth without a leak</h3>
+
+          The third pattern is the most deceptive.<br>
+        <br>
+          A promotion storm occurs when objects survive just long enough to be promoted into old generation, but not long enough to justify their cost.<br>
+        <br>
+          The heap grows.<br>
+          Old generation occupancy increases.<br>
+          GC activity intensifies.<br>
+        <br>
+          Performance degrades.<br>
+          Latency spikes.<br>
+          SLA dashboards look unhealthy.<br>
+        <br>
+          And yet — the heap is not filling up.<br>
+        <br>
+          There may be plenty of free memory.<br>
+          There may never be an OOM.<br>
+        <br>
+          This is not a leak.<br>
+        It is a <b>pressure problem</b>.
+        <br>
+        🎯 The key confusion here is between <i>volume</i> and <i>rhythm</i>.<br>
+        <br>
+          The system isn’t necessarily storing too much.<br>
+          It’s allocating, promoting, and collecting at a pace that hurts throughput and tail latency.<br>
+        <br>
+          In live production debugging sessions, this pattern is particularly dangerous.<br>
+        <br>
+          Under pressure, teams look at:
+          <ul>
+          <li>rising old gen,
+            <li>frequent GC,
+            <li>degraded response times,
+          </ul>
+          and conclude that a leak is underway.<br>
+        <br>
+          Actions follow.<br>
+          Heap size increases.<br>
+          Restarts are scheduled.<br>
+        <br>
+          The system survives — but the diagnosis remains wrong.<br>
+        <br>
+          📊 **Graph placement — Promotion storm pattern**
+
+
+        <br>
+          Promotion storms punish performance.<br>
+          They do not necessarily threaten immediate survival.<br>
+
+          <hr>
+
+          <h3>The cost of reacting too fast</h3>
+
+          Across all three patterns, the danger is the same.
+          <ul>
+          <li>Increasing the heap ≠ understanding
+            <li>Restarting the JVM ≠ fixing
+            <li>Every “pragmatic” workaround carries hidden cost
+          </ul>
+
+          Sometimes that cost is infrastructure.<br>
+          Sometimes it is operational fatigue.<br>
+          Sometimes it is risk quietly carried by the team.<br>
+        <br>
+          What works today may become tomorrow’s incident.<br>
+
+          <hr>
+
+        <h3>Conclusion</h3>
+
+          🎯 A growing heap is not a verdict.<br>
+          It’s a question.<br>
+        <br>
+        Sometimes the answer is <i>“everything is fine.”</i><br>
+          Sometimes it’s <i>“we’re retaining too much.”</i><br>
+          Sometimes it’s <i>“we’re putting too much pressure on the system.”</i><br>
+        <br>
+          The real risk is not choosing the wrong fix.<br>
+          It’s never being sure what you’re fixing.<br>
+        <br>
+          Rebooting works.<br>
+          Adding memory works.<br>
+          Until they become the most expensive parts of the system.<br>
+        <br>
+          Understanding the difference doesn’t require a rewrite.<br>
+          It requires looking at the right signals — over the right time horizon.<br>
+
+          <hr>
+
+          if you’re dealing with a production system where memory behavior is unclear, unstable, or slowly becoming a risk,<br>
+          I work with teams to analyze what’s actually happening — and to decide what’s worth fixing, and what isn’t.<br>
+        <br>
+          You can reach me here : <a href="mailto:contact@lkloeble.dev">contact@lkloeble.dev</a>
+
+
+
+
+
+        </p>
+
+
+      </div>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
 </body>
 </html>
