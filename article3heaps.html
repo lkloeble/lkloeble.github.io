@@ -106,10 +106,45 @@
         <br>
           A warmup strategy only works if it is <b>explicitly communicated</b> to the teams who monitor and operate the system.<br>
 
-          📊 **Graph placement — Warmup pattern**
+        <style>
+          .figure-wide {
+            margin: 2rem 0;
+          }
+          .figure-wide img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+          }
+          .figure-wide figcaption {
+            margin-top: 0.75rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            opacity: 0.9;
+          }
+        </style>
+
+        <figure class="figure figure-wide">
+          <img
+                  src="images/article3heaps_plateau.svg"
+                  alt="Heap usage over time: gradual warmup phase followed by a stable plateau with small oscillations (healthy baseline)."
+                  loading="lazy"
+                  decoding="async"
+                  width="1200"
+                  height="675"
+          />
+
+          <figcaption>
+            <strong>Scenario 1 — Warmup then plateau (healthy baseline).</strong>
+            The heap rises during startup as the system initializes, loads classes, builds internal structures, and warms caches.
+            Once steady-state traffic begins, usage stabilizes around a nominal level.
+            Small oscillations are expected: allocation bursts and young collections create normal “breathing” without any long-term upward drift.
+          </figcaption>
+        </figure>
 
 
-          <hr>
+
+        <hr>
 
         <h3> #2 Retained objects - when memory stops being released</h3>
 
@@ -158,9 +193,27 @@
         <br>
           Both actions reduce pressure — without restoring understanding.<br>
         <br>
-          📊 **Graph placement — Retention pattern**
+        <figure class="figure figure-wide">
+          <img
+                  src="images/article3heaps_leak.svg"
+                  alt="Heap usage over time showing a slow but continuous upward trend after warmup, without returning to a stable plateau."
+                  loading="lazy"
+                  decoding="async"
+                  width="1200"
+                  height="675"
+          />
 
-          <hr>
+          <figcaption>
+            <strong>Scenario 2 — Retention growth (functional memory leak).</strong>
+            After the initial warmup, heap usage never truly stabilizes.
+            Objects that could be released from a business perspective remain reachable, preventing the system from reaching a steady-state plateau.
+            The growth is often slow and deceptive: the application may run for days or weeks before memory pressure becomes critical.
+            Garbage collection continues to operate correctly — it simply has nothing eligible to reclaim.
+          </figcaption>
+        </figure>
+
+
+        <hr>
 
         <h3>#3 Promotion storms - growth without a leak</h3>
 
@@ -205,7 +258,25 @@
         <br>
           The system survives — but the diagnosis remains wrong.<br>
         <br>
-          📊 **Graph placement — Promotion storm pattern**
+        <figure class="figure figure-wide">
+          <img
+                  src="images/article3heaps_storm.svg"
+                  alt="Heap usage over time showing a sudden spike caused by promotion pressure, followed by a gradual recovery as garbage collection regains control."
+                  loading="lazy"
+                  decoding="async"
+                  width="1200"
+                  height="675"
+          />
+
+          <figcaption>
+            <strong>Scenario 3 — Promotion storm (allocation pressure, not a leak).</strong>
+            During periods of intense allocation, large volumes of short-lived objects survive young collections and are prematurely promoted.
+            Heap usage rises sharply, often triggering alarmist reactions.
+            Yet, once allocation pressure drops and the collector catches up, memory usage recedes.
+            This pattern can severely impact latency and SLAs, even though it does not lead to an inevitable out-of-memory condition.
+          </figcaption>
+        </figure>
+
 
 
         <br>
