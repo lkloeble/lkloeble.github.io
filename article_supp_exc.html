@@ -1,0 +1,313 @@
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+<head>
+    <title>Laurent Kloeble - Java Consultant - Article : 3 Memory Heaps increase</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+</head>
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+        <nav>
+            <a href="#menu">Menu</a>
+        </nav>
+    </header>
+
+    <!-- Menu -->
+    <nav id="menu">
+        <div class="inner">
+            <h2>Menu</h2>
+            <ul class="links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="technical.html">Technical</a></li>
+                <li><a href="articles.html">Articles</a></li>
+            </ul>
+            <a href="#" class="close">Close</a>
+        </div>
+    </nav>
+
+    <!-- Wrapper -->
+    <section id="wrapper">
+        <header>
+            <div class="inner">
+                <h2>Suppressed Exceptions — The Half of Failure Most Systems Ignore</h2>
+                <p>
+
+                    Try-with-resources is often described as syntactic sugar. A convenience feature added because developers kept forgetting to close resources.
+                    That explanation is comforting. It is also incomplete.
+
+
+                </p>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="wrapper">
+            <div class="inner">
+
+                <p>
+
+
+                    The real change introduced in Java 7 was not automatic cleanup.
+                    <br>
+                    It was a correction to a failure model that could only represent one exception, even when several occurred.
+                    <br>
+                    In production systems, that limitation mattered more than most people realized.
+                    <br><hr>
+                    <h3>Failure is rarely singular</h3>
+                    <br>
+                    Large production systems almost never fail in a single way.
+                    <br><br>
+                    A business operation can fail.<br>
+                    Then, while unwinding, releasing resources, flushing buffers, or closing connections, another failure can occur.
+                    <br><br>
+                    Both failures are real.<br>
+                    Both carry diagnostic value.<br>
+                    <br>
+                    Before Java 7, the Java exception model could not express that reality.
+                    <br><hr>
+
+                    <h3>The pre–Java 7 model: overwriting reality</h3>
+                    <br>
+                    Before suppressed exceptions existed, the language enforced a brutal simplification:
+                    <br>
+                    <ul>
+                    <li>one exception survives
+                    <li>the last one wins
+                    </ul>
+                    The canonical pattern looked like this:
+                    <br>
+                    <pre><code>
+                    try {
+                        businessOperation();
+                    } finally {
+                        resource.close();
+                    }
+                    </code></pre>
+
+                    If businessOperation() failed, and close() failed as well, the cleanup exception overwrote the original failure.
+                    <br><br>
+                    No warning.<br>
+                    No signal.<br>
+                    No trace that something else had gone wrong earlier.<br>
+                    <br>
+                    The system crashed — but the root cause quietly disappeared.<br>
+                    <br>
+                    This was not a misuse of the language.<br>
+                    It was the best the model allowed.<br>
+                    <hr>
+                    <h3>🧠 Java 7: acknowledging multi-failure reality</h3>
+
+                    Java 7 introduced a fundamental change to Throwable:
+                    <br><br>
+                    <ul>
+                    <li>a primary exception remains primary
+                    <li>secondary failures can be attached, not replaced
+                    </ul>
+                    This is what <i>suppressed exceptions</i> are.
+                <br><br>
+                    Concretely, Java 7 extended Throwable with addSuppressed(Throwable) and getSuppressed(), making secondary failures representable instead of disposable.
+                <br><br>
+                    They are not a side effect of try-with-resources.<br>
+                    They are an extension of the exception model itself.
+                <br><br>
+                    Only once that model existed could try-with-resources be correct.
+                <br><hr>
+                    <h3>Try-with-resources is not sugar</h3>
+
+                    Try-with-resources did not merely reduce boilerplate.
+                <br><br>
+                    It encoded a semantic guarantee:
+                <br><br>
+                    If multiple failures occur, the primary failure is preserved,<br>
+                    and secondary failures are not silently lost.
+                <br><br>
+                    In other words, it enforces failure causality.
+                <br><br>
+                    Calling this syntactic sugar misses the point.<br>
+                    Sugar makes code shorter.<br>
+                    This change makes failure representable.
+                <br><hr>
+                    <h3>A minimal demonstration</h3>
+
+                    The accompanying repository contains a deliberately small program that reproduces three common production scenarios:
+                <br><br>
+                    <ol>
+
+                    <li>Naive try/finally<br>
+                    The cleanup failure overwrites the business failure.<br>
+                    The original exception is lost.<br><br>
+
+                        <li>Try-with-resources<br>
+                    The business failure remains primary.<br>
+                    The cleanup failure is preserved as suppressed.<br><br>
+
+                        <li>Naive exception wrapping<br>
+                    The suppressed exception still exists —<br>
+                    but it is no longer visible at the level most systems observe.<br><br>
+                    </ol>
+                    The last case is particularly important.
+                <br><hr>
+                <h3>🔍 Preservation is not observation</h3>
+
+                    In the third scenario, nothing is technically “wrong”:
+                <ul>
+                    <li>the JVM preserved the suppressed exception
+                    <li>the causal chain still exists
+                </ul>
+                    And yet, in practice, the information is gone.<br>
+                <br>
+                    Why?<br>
+                <br>
+                    Because many production systems:
+                <ul>
+                    <li>log only the top-level exception
+                    <li>serialize only type and message
+                    <li>stop at getCause()
+                    <li>never inspect getSuppressed()
+                </ul>
+                    In distributed systems, the problem is amplified.<br>
+                    When an error crosses a service boundary via JSON or REST, suppressed exceptions are often the first casualties of serialization.
+                <br><br>
+                    The runtime did its job.<br>
+                    The reporting path did not.<br>
+                <br>
+                    This is how suppressed exceptions become <i>operationally invisible</i>.
+                <br><hr>
+                <h3>🩺 A medical metaphor</h3>
+
+                    I often use a medical metaphor when thinking about monoliths.<br>
+                <br>
+                    A large production system is rarely sick in just one way.<br>
+                    It is a multi-pathological patient.<br>
+                <br>
+                    Ignoring suppressed exceptions is like treating the most visible symptom
+                    while leaving other conditions undiagnosed.<br>
+                <br>
+                    The worst case is not the initial failure.<br>
+                <br>
+                    It is the fix — followed immediately by another crash after redeployment.<br>
+                    Discovered at the same time by users and executives.<br>
+                <br>
+                    A condition that was already there.<br>
+                    Simply never observed.
+                <br><hr>
+                <h3>“Java 6 done right” — and why nobody wrote it</h3>
+                <br>
+                    At this point, a reasonable objection arises:<br>
+                <br>
+                    “We could have done this manually before Java 7.”<br>
+                <br>
+                    In theory, yes.<br>
+                <br>
+                    In practice, doing it correctly requires logic very close to what the compiler now generates for try-with-resources.<br>
+                <br>
+                    A simplified but correct version looks like this:<br>
+
+                    <pre><code>
+                    FaultyResource resource = new FaultyResource("MANUAL", true);
+
+                    Throwable primary = null;
+                    try {
+                        resource.businessOperation();           // Exception A
+                    } catch (Throwable t) {
+                        primary = t;
+                        throw t;
+                    } finally {
+                        if (primary != null) {
+                            try {
+                                resource.close();               // Exception B
+                            } catch (Throwable closeFailure) {
+                                primary.addSuppressed(closeFailure);
+                            }
+                        } else {
+                            resource.close();
+                        }
+                    }
+                    </code></pre>
+
+                    This code preserves the same semantic guarantees as try-with-resources:
+                    <ul>
+                        <li>the original failure remains primary
+                        <li>cleanup failures are attached, not overwritten
+                        <li>no diagnostic information is silently lost
+                    </ul>
+                    Without addSuppressed, this code would be forced to choose:<br>
+                    lose the primary failure, or lose the cleanup failure.<br>
+                <br>
+                    That dilemma — not forgotten close() calls — is what Java 7 actually resolved.<br>
+                <br>
+                    It is also:
+                    <ul>
+                        <li>longer
+                        <li>branch-heavy
+                        <li>easy to get subtly wrong
+                    </ul>
+                    This is why try-with-resources is not syntactic sugar.
+                <br>
+                    It did not merely reduce boilerplate.<br>
+                    It replaced fragile, rarely-correct handwritten logic<br>
+                    with a semantic guarantee enforced by the language.
+                <br><hr>
+                <h3>The real risk today</h3>
+                <br>
+                    The real risk today is not using try-with-resources incorrectly.<br>
+                <br>
+                    It is assuming that because the runtime preserves information,<br>
+                    your system observes it.<br>
+                <br>
+                    Many do not.
+                <br><hr>
+                <h3>⚠️ Closing</h3>
+
+                    Suppressed exceptions are not noise.<br>
+                    They are comorbidities.<br>
+                <br>
+                    The JVM learned to preserve them in Java 7.<br>
+                    Whether your systems notice them is still an open question.<br>
+                <br>
+                    Most systems don’t notice what they suppress.<br>
+                <br><br><br><br><br><br><br>
+                If you’re dealing with a production system where failures are hard to diagnose,
+                where incident reports feel incomplete,
+                or where fixes tend to reveal new issues rather than resolve them,
+                <br>
+                I work with teams to understand what the system is actually doing —
+                and to decide what is worth fixing, what is worth observing,
+                and what is better left untouched.
+                <br>
+                You can reach me here : <a href="mailto:contact@lkloeble.dev">contact@lkloeble.dev</a>
+
+
+                </p>
+
+
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
+</body>
+</html>
