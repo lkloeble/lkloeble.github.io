@@ -1,0 +1,283 @@
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+<head>
+    <title>Laurent Kloeble - Java Consultant - Article : JIT pitfalls</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+</head>
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+        <nav>
+            <a href="#menu">Menu</a>
+        </nav>
+    </header>
+
+    <!-- Menu -->
+    <nav id="menu">
+        <div class="inner">
+            <h2>Menu</h2>
+            <ul class="links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="technical.html">Technical</a></li>
+                <li><a href="articles.html">Articles</a></li>
+            </ul>
+            <a href="#" class="close">Close</a>
+        </div>
+    </nav>
+
+    <!-- Wrapper -->
+    <section id="wrapper">
+        <header>
+            <div class="inner">
+                <h2>The Code You Write Is Not Necessarily the Code That Runs</h2>
+                <p>
+
+                    One of the most unsettling realities of the JVM is also one of the least internalized.
+
+                    Once the JIT compiler enters the picture, <b>your source code is no longer a reliable description of what actually executes</b>.
+
+
+                </p>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="wrapper">
+            <div class="inner">
+
+                <p>
+
+                    This is not a philosophical statement.
+                    <br>
+                    It has very concrete consequences for performance, benchmarking, and production diagnostics.
+                    <br>
+                    To understand why, you need to let go of a comforting illusion.
+                    <br>
+                    <hr>
+
+                <h3> The Illusion of “Initialization Code”</h3>
+                <br>
+                    Many Java developers rely on a familiar mental model:
+                <br>
+                <blockquote>“If I write code that does work, the JVM will execute that work.”</blockquote>
+                    This model feels intuitive.<br>
+                    It worked reasonably well in simpler execution environments.<br>
+                    And it still feels true when reading Java code in an IDE.<br>
+                <br>
+                    But the JIT does not care about intentions.<br>
+                    It cares about <b>observable effects</b>.<br>
+                <br>
+                    <hr>
+
+                <h3> A Concrete Example: Initialization That Never Happened</h3>
+                <br>
+                    Consider the following initialization logic:
+                    <pre><code>
+                    void warmUp() {
+
+                        long acc = 0;
+                        for (int i = 0; i < 10_000_000; i++) {
+                            acc += expensiveComputation(i);
+                        }
+                    }
+                        </code></pre>
+                <br>
+                    At first glance, this looks like a “serious” warm-up:
+<ul>
+    <li>millions of iterations</li>
+    <li>non-trivial computation</li>
+    <li>visible CPU activity</li>
+</ul>
+                <br>
+                    And yet, from the JVM’s point of view, this entire method is deeply suspicious.<br>
+                <br>
+                    Why?<br>
+                <br>
+                    Because `acc` never escapes the method.<br>
+                    Its value is never observed.<br>
+                    No state is modified.<br>
+                    Nothing survives execution.<br>
+                <br>
+                    Which means that <b>the entire loop is a candidate for elimination</b>.<br>
+                <br>
+                    The work _looks_ expensive.<br>
+                    But it produces no observable effect.<br>
+                <br>
+                    <hr>
+
+                <h3>Why the JIT Removed It</h3>
+                <br>
+                    The JIT compiler doesn’t optimize code.<br>
+                    It optimizes <b>program behavior</b>.<br>
+                <br>
+                    If a computation does not:<br>
+                <br>
+                <ul>
+                    <li>modify externally visible state,</li>
+                    <li>influence control flow that escapes the method,</li>
+                    <li>or produce a value that is later consumed,</li>
+
+                <br>
+                    then it becomes semantically irrelevant.<br>
+                <br>
+                    In other words:<br>
+                <br>
+                <blockquote>The JIT does not ask _“Is this code expensive?”_<br>
+                    It asks _“Does this code matter?”_</blockquote>
+                <br>
+                    And if the answer is “no”, the code may simply disappear.<br>
+                <br>
+                    <hr>
+
+                <h3>A Tiny Change — Everything Survives</h3>
+                <br>
+                    Now consider a minimal variation:<br>
+                    <pre><code>
+                    volatile long sink;
+
+                    void warmUp() {
+                        long acc = 0;
+                        for (int i = 0; i < 10_000_000; i++) {
+                            acc += expensiveComputation(i);
+                        }
+                        sink = acc;
+                    }
+                </code></pre>
+                <br>
+                    Nothing meaningful has changed from a developer’s perspective.<br>
+                <br>
+                    But from the JVM’s point of view, everything is different.<br>
+                <br>
+                    The result now:
+<ul>
+                    <li>escapes the method,</li>
+    <li>affects shared state,</li>
+    <li>becomes observable.</li>
+</ul>
+                The JIT is no longer free to eliminate the work.<br>
+                <br>
+                    The computation <b>survives execution</b>.<br>
+
+                    <hr>
+
+                    <h3>Why This Breaks Benchmarks and Warm-Ups</h3>
+                <br>
+                    This single distinction explains a surprising number of real-world problems:
+                    <ul>
+                    <li>“Warm-up” loops that warm up absolutely nothing</li>
+                        <li>Micro-benchmarks reporting absurdly low numbers</li>
+                        <li>Performance improvements without any code change</li>
+                        <li>Benchmarks that collapse when logging is added</li>
+                    </ul>
+                <br>
+                    In all these cases, the issue is not measurement noise.<br>
+                <br>
+                    The issue is that <b>you may be measuring work that does not exist</b>.<br>
+                <br>
+                    The JVM is not broken.<br>
+                    Your mental model is.<br>
+                <br>
+                    <hr>
+
+                <h3>Why Production Diagnostics Feel So Confusing</h3>
+                <br>
+                    This behavior becomes even more problematic in production.<br>
+                <br>
+                    You investigate a performance issue:<br>
+                <ul>
+                    <li>CPU looks fine</li>
+                    <li>GC looks quiet</li>
+                    <li>Threads look idle</li>
+                </ul>
+                <br>
+                    And yet, something feels wrong.<br>
+                <br>
+                    Sometimes, the explanation is not hidden contention or memory pressure.<br>
+                <br>
+                    Sometimes, the explanation is simpler and more disturbing:<br>
+                <br>
+                <blockquote>The JVM already decided the work was meaningless — and removed it.</blockquote>
+                <br>
+                    You are diagnosing ghosts.<br>
+
+                <hr>
+
+                    <h3>How to Observe What Actually Survived</h3>
+                <br>
+                    At this point, reading Java code is no longer sufficient.<br>
+                <br>
+                    To understand what truly executes, you need to observe:
+                <ul>
+                    <li>what the JIT compiled,
+                    <li>what it eliminated,
+                    <li>and what actually reached machine code.
+                </ul>
+                <br>
+                    Tools like <b>JITWatch</b>, combined with certain JVM diagnostic flags, make this distinction painfully clear by showing which methods were compiled, inlined, or optimized away entirely.<br>
+                <br>
+                    In practice, serious JVM diagnostics often require <b>changing the level of observation</b>, not just reading code more carefully.<br>
+
+                <hr>
+
+                        <h3>The Real Lesson</h3>
+                <br>
+                    Understanding the JIT is not about curiosity or clever tricks.<br>
+                <br>
+                    It is about avoiding false conclusions.<br>
+                <br>
+                    Once you accept that the JVM actively rewrites your program:<br>
+                <ul>
+                    <li>benchmarks stop surprising you,
+                    <li>production behavior becomes more coherent,
+                    <li>and performance diagnostics become grounded in reality.
+                </ul>
+                <br>
+                    The code you write is an intention.<br>
+                <br>
+                    The code that runs is a decision.<br>
+                <br>
+                    And effective JVM diagnostics start by understanding the difference.<br>
+
+                <br><br><br><br><br><br><br>
+                    If you’re dealing with JVM-based systems where performance behavior doesn’t match what the code seems to say,
+                    where benchmarks give inconsistent results,
+                    or where production diagnostics feel disconnected from reality,
+                    <br><br>
+                    I work with teams to understand what actually runs — not just what was written — and to restore a reliable mental model of the system.
+                <br>
+                You can reach me here : <a href="mailto:contact@lkloeble.dev">contact@lkloeble.dev</a>
+
+
+                </p>
+
+
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
+</body>
+</html>
