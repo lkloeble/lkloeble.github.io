@@ -1,0 +1,374 @@
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+<head>
+    <title>Laurent Kloeble - Java Consultant - Article : Impossible state of JMM</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+</head>
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+        <nav>
+            <a href="#menu">Menu</a>
+        </nav>
+    </header>
+
+    <!-- Menu -->
+    <nav id="menu">
+        <div class="inner">
+            <h2>Menu</h2>
+            <ul class="links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="technical.html">Technical</a></li>
+                <li><a href="articles.html">Articles</a></li>
+            </ul>
+            <a href="#" class="close">Close</a>
+        </div>
+    </nav>
+
+    <!-- Wrapper -->
+    <section id="wrapper">
+        <header>
+            <div class="inner">
+                <h2>The JVM Can Legally Produce Impossible States</h2>
+                <p>
+
+                    Two threads.<br>
+                    Two variables.<br>
+                    No locks.<br>
+                    <br>
+                    At first glance, the following outcome looks impossible:
+                    <br><br>
+                    r1 = 0<br>
+                    r2 = 0<br>
+                    <br>
+                    And yet, under the <b>Java Memory Model (JMM)</b>, this result is perfectly legal.<br>
+                    <br>
+                    This article explains why.<br>
+                    <br>
+                    If you want to see it happen yourself, a small demo program is available here:<br>
+                    <br>
+                    <a href="https://github.com/lkloeble/jmm-impossible-states-demo" target="_blank">https://github.com/lkloeble/jmm-impossible-states-demo</a>
+
+
+                </p>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="wrapper">
+            <div class="inner">
+
+                <p>
+
+                    <h3>The scenario</h3>
+
+                    Consider the following code executed by two threads.<br>
+                <br>
+                    <pre><code>
+                    Thread 1:
+
+                    x = 1;
+                    r1 = y;
+
+                    Thread 2:
+
+                    y = 1;
+                    r2 = x;
+                    </code></pre>
+                    Both shared variables start at `0`.<br>
+                <br>
+                    Intuition suggests that at least one read should observe the other thread’s write.<br>
+                <br>
+                    Yet the following outcome can occur:<br>
+                <br>
+                    r1 = 0<br>
+                    r2 = 0<br>
+                <br>
+                    At first sight, this appears to violate causality.<br>
+                <br>
+                    It does not.
+
+                    <br><hr>
+
+                    <h3>The key rule: no happens-before, no guarantees</h3>
+
+                    The Java Memory Model defines when writes performed by one thread must become visible to another thread.<br>
+                <br>
+                    That guarantee is established through a <b>happens-before relationship</b>.<br>
+                <br>
+                    Typical constructs that create happens-before include:<br>
+                <br>
+                    <ul>
+                        <li>`volatile`
+                        <li>`synchronized`
+                        <li>`Lock`
+                        <li>thread start/join
+                        <li>concurrent data structures
+                    </ul>
+
+                    If no such relationship exists, the JVM provides <b>very few guarantees</b> about:<br>
+
+                    <ul>
+                        <li>ordering of operations
+                        <li>visibility of writes
+                        <li>timing of memory propagation
+                    </ul>
+
+                    And our example deliberately contains <b>no synchronization at all</b>.
+
+                    <br><hr>
+
+                    <h3>Instruction reordering</h3>
+
+                    One reason the paradox occurs is <b>instruction reordering</b>.<br>
+                <br>
+                    The JVM and the CPU are allowed to rearrange instructions in order to optimize execution, as long as the result <b>appears correct for a single thread</b>.<br>
+                <br>
+                    For example, the following transformation is legal:
+                <br><br>
+                    <pre><code>
+                    Thread 1:
+
+                    r1 = y
+                    x = 1
+
+                    Thread 2:
+
+                    r2 = x
+                    y = 1
+                    </code></pre>
+                <br>
+                    If both reads happen before the writes become visible, both threads observe `0`.<br>
+                <br>
+                    From each thread’s point of view, the execution still appears valid.<br>
+                <br>
+                    The paradox only emerges when we combine both observations.<br>
+
+                    <br><hr>
+
+                    <h3>Sequential consistency illusion</h3>
+
+                    A subtle point often missed is that <b>each thread still observes its own instructions in program order</b>.<br>
+                <br>
+                    The JVM preserves what looks like sequential execution for each individual thread.<br>
+                <br>
+                    The illusion breaks only when multiple threads observe the same memory.<br>
+                <br>
+                    This is why concurrency bugs often appear so mysterious:<br>
+                    the code seems perfectly correct when reasoned about locally.<br>
+
+                    <br><hr>
+
+                    <h3>The hardware reality: store buffers</h3>
+                <br>
+                    The explanation goes deeper than compiler optimizations.<br>
+                <br>
+                    Modern CPUs do not immediately write data to main memory.<br>
+                <br>
+                    Instead, writes are placed in <b>store buffers</b>.<br>
+                <br>
+                    A simplified view looks like this:<br>
+                <br>
+                    Thread → Store Buffer → Cache → Main Memory<br>
+                <br>
+                    When a thread executes:<br>
+                <br>
+                    x = 1<br>
+                <br>
+                    the value may first be placed in the CPU’s store buffer.<br>
+                <br>
+                    From the perspective of the writing thread, the write has already happened.<br>
+                <br>
+                    But other cores may not see it yet.<br>
+                <br>
+                    This means another thread may still read the old value.<br>
+                <br>
+                    Store buffers exist because they allow CPUs to:<br>
+                <br>
+                    <ul>
+                        <li>reduce memory latency
+                        <li>pipeline operations
+                        <li>maintain high throughput
+                    </ul>
+
+                    Without them, modern processors would be dramatically slower.<br>
+                <br>
+                    But they also make memory visibility more complex.<br>
+
+                    <br><hr>
+
+                    <h3>Why the demo works</h3>
+
+                    The demo program repeatedly executes the scenario until it observes:<br>
+                <br>
+                    r1 = 0<br>
+                    r2 = 0<br>
+                <br>
+                    When this happens, it prints something like:<br>
+                <br>
+                    Observed the "impossible" state:<br>
+                    r1 = 0, r2 = 0<br>
+                    First observed after 26053 iterations<br>
+                    Elapsed time: 1315 ms<br>
+                <br>
+                    This means the program detected the outcome <b>for the first time after 26,053 attempts</b>.<br>
+                <br>
+                    Not that it happened 26,053 times.<br>
+                <br>
+                    The result depends heavily on:<br>
+                <br>
+                    <ul>
+                        <li>CPU architecture
+                        <li>JVM implementation
+                        <li>thread scheduling
+                        <li>system load
+                        <li>pure timing luck
+                    </ul>
+                <br>
+                    Sometimes it appears quickly.<br>
+                    Sometimes it takes much longer.<br>
+
+                    <br><hr>
+
+                    <h3>Restoring order: establishing happens-before</h3>
+                <br>
+                    The key lesson is that the problem disappears as soon as we introduce proper synchronization.<br>
+                <br>
+                    Multithreading is not chaos.<br>
+                    It only becomes chaos when we remove the rules that make memory visible and ordered.<br>
+                <br>
+                    For example, if the shared variables are declared `volatile`:<br>
+                <br>
+                    <pre><code>
+                    volatile int x = 0;
+                    volatile int y = 0;
+
+                    Thread 1:
+                    x = 1;
+                    r1 = y;
+
+                    Thread 2:
+                    y = 1;
+                    r2 = x;
+                    </code></pre>
+                <br>
+                    `volatile` introduces <b>memory barriers</b> that enforce two important guarantees:<br>
+                <br>
+                    1. writes to a volatile variable are <b>immediately visible</b> to other threads<br>
+                    2. certain <b>instruction reorderings are forbidden</b><br>
+                <br>
+
+                    Once those guarantees exist, the `0 / 0` outcome is no longer possible.<br>
+                <br>
+                    In other words, the chaos disappears once we establish a <b>formal happens-before relationship</b>.<br>
+                <br>
+                    Java provides several tools to establish that ordering:<br>
+
+                    <ul>
+                        <li>`volatile`
+                        <li>`synchronized`
+                        <li>locks
+                        <li>concurrent collections
+                        <li>atomic variables
+                    </ul>
+                <br>
+                    Without them, multithreaded code operates in a world where ordering and visibility are intentionally relaxed for performance.<br>
+
+                    <br><hr>
+
+                    <h3>Why this matters in real systems</h3>
+
+                    In small demo programs, this behavior is fascinating.<br>
+                <br>
+                    In large production systems, it can be dangerous.<br>
+                <br>
+                    In legacy monoliths especially, concurrency issues often remain dormant for years.<br>
+                <br>
+                    They may appear only when:<br>
+                <br>
+                    <ul>
+                        <li>the system reaches higher load
+                        <li>the hardware changes
+                        <li>the JVM version changes
+                        <li>the deployment environment changes
+                    </ul>
+                <br>
+                    For example, moving from <b>x86 to ARM</b> can expose hidden concurrency bugs.<br>
+                <br>
+                    x86 provides relatively strong memory ordering guarantees.<br>
+                <br>
+                    ARM allows much more aggressive reordering.<br>
+                <br>
+                    Code that "worked for years" may suddenly start behaving unpredictably.
+
+                    <br><hr>
+
+                    <h3>The real lesson</h3>
+
+                    Multithreading is not chaos.<br>
+                <br>
+                    But without synchronization, it can look like it.<br>
+                <br>
+                    The Java Memory Model deliberately relaxes ordering and visibility rules in order to allow modern hardware and JIT compilers to run efficiently.<br>
+                <br>
+                    If two threads communicate through shared state, <b>that communication must be explicit</b>.<br>
+                <br>
+                    Otherwise the JVM is free to produce results that seem impossible — but are perfectly legal.<br>
+
+                    <br><hr>
+
+                    <h3>Demo code</h3>
+
+                    The demo program used in this article is available here:<br>
+                <br>
+                    <a href="https://github.com/lkloeble/jmm-impossible-states-demo" target="_blank">https://github.com/lkloeble/jmm-impossible-states-demo</a> <br>
+
+                    <br><hr>
+
+                    <h3>Final thought</h3>
+
+                    Concurrency bugs rarely appear when you are looking for them.<br>
+                <br>
+                    They appear under load, on a different machine, or months after a harmless-looking change.<br>
+                <br>
+                    In large Java systems, diagnosing those behaviors requires understanding not only the code, but also the <b>memory model and the hardware beneath it</b>.<br>
+                <br><br><br><br><br><br><br><br><br>
+                    If you're dealing with a production system where concurrency behavior is difficult to explain, where threads interact in unexpected ways, or where incidents appear only under specific load conditions,<br>
+                <br>
+                    I work with teams to understand what the system is actually doing — and how to restore order when the threads stop agreeing on reality.<br>
+                <br>
+                    You can reach me here: <b>contact@lkloeble.dev</b>
+
+                    </p>
+
+
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
+</body>
+</html>
