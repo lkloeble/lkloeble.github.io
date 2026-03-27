@@ -1,0 +1,368 @@
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+<head>
+    <title>Laurent Kloeble - Java Consultant - Article : the benchmark illusion</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+</head>
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+        <nav>
+            <a href="#menu">Menu</a>
+        </nav>
+    </header>
+
+    <!-- Menu -->
+    <nav id="menu">
+        <div class="inner">
+            <h2>Menu</h2>
+            <ul class="links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="technical.html">Technical</a></li>
+                <li><a href="articles.html">Articles</a></li>
+            </ul>
+            <a href="#" class="close">Close</a>
+        </div>
+    </nav>
+
+    <!-- Wrapper -->
+    <section id="wrapper">
+        <header>
+            <div class="inner">
+                <h2>Your benchmark says 0.2 ns/op</h2>
+                <p>
+                <blockquote>
+                    Your benchmark says 0.2 ns/op.<br>
+                    That number looks precise.<br>
+                    Most of the time, it doesn’t mean what you think it means at all.
+                </blockquote>
+
+                </p>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="wrapper">
+            <div class="inner">
+
+                <p>
+
+                <h3>The illusion of precision</h3>
+
+                You wrote a benchmark.<br>
+                <br>
+                You ran it.<br>
+                <br>
+                You got a number.<br>
+                <br>
+                And it looks… scientific.<br>
+                <br>
+                But precision is not correctness.
+                <br><br>
+                <blockquote>
+                A number can be precise and still completely meaningless.
+                </blockquote>
+                <hr>
+
+                <h3>You are not benchmarking your code</h3>
+
+                At nanosecond scale, you are not measuring a function.
+                <br>
+                You are measuring a system.<br><br>
+                <ul>
+                <li>the JVM
+                    <li>the JIT compiler
+                    <li>the CPU
+                    <li>the operating system
+                </ul>
+
+                Each layer interferes with your measurement.
+                <br>
+                Each layer can change what is actually executed.
+                <br>
+                <hr>
+
+                <h3>The code you think you run may not exist</h3>
+
+                Consider this:<br>
+                <pre><code>
+                long start = System.nanoTime();
+                doSomething();
+                long end = System.nanoTime();
+                </code></pre>
+                Looks reasonable.
+                <br><br>
+                It isn’t.
+
+                <hr>
+
+                <h4>The JVM is allowed to rewrite your benchmark</h4>
+
+                The JIT compiler is not here to respect your code.
+
+                It is here to optimize it.
+                <ul>
+                    <li>methods get inlined
+                    <li>computations get simplified
+                    <li>unused results get removed
+                </ul>
+
+                In extreme cases:<br><br>
+                <blockquote>
+                your code is not optimized.<br>
+                it is erased.
+                </blockquote>
+                <hr>
+
+                <h4>Dead code elimination</h4>
+
+                If the result of your computation is not used:<br><br>
+                <blockquote>
+                the JVM may remove it entirely.<br>
+                You are benchmarking a void.
+                </blockquote>
+                <hr>
+
+                <h4>Constant folding</h4>
+
+                If a result can be computed ahead of time:<br><br>
+                <blockquote>
+                    the JVM may replace your computation with a constant.
+                </blockquote>
+
+                <hr>
+
+                <h4>Warmup effects</h4>
+
+                At first, your code runs interpreted.<br>
+                <br>
+                Then it gets compiled.<br>
+                <br>
+                Then optimized.<br><br>
+                <blockquote>
+                    Measuring too early means measuring the wrong thing.
+                </blockquote>
+                <hr>
+
+                <h3>The three benchmark killers</h3>
+                <ul>
+                    <li>Dead Code Elimination → your code never runs
+                    <li>Constant Folding → the result is precomputed
+                    <li>Warmup → you measure interpretation, not optimized execution
+                </ul>
+
+                <hr>
+
+                <h3>Even when the code runs, you measure noise</h3>
+
+                Let’s assume your code actually executes.<br>
+                <br>
+                You are still not measuring just your logic.<br>
+                <br>
+                You are measuring:
+                <ul>
+                    <li>CPU cache behavior
+                    <li>branch prediction
+                    <li>frequency scaling
+                    <li>OS scheduling
+                </ul>
+
+                At nanosecond scale, these dominate.
+
+                <hr>
+
+                <h3>A reality check</h3>
+
+                A main memory access is ~100 ns.<br>
+                <br>
+                If your benchmark reports 0.2 ns:<br>
+                <br>
+                <blockquote>
+                    you are not measuring business logic.
+                </blockquote>
+
+
+                You are measuring:
+                <ul>
+                    <li>L1 cache behavior
+                    <li>CPU pipelines
+                    <li>or noise
+                </ul>
+
+                <hr>
+
+                <h3>The deeper problem: averages lie</h3>
+
+                Even if your measurement was correct…<br>
+                <br>
+                A single number is not enough.<br>
+                <br>
+                Most naive benchmarks report:<br>
+                <br>
+                <blockquote>
+                average latency
+                </blockquote>
+
+                This is almost always misleading.<br>
+
+                <hr>
+
+                <h4>Why averages are dangerous</h4>
+
+                Imagine this distribution:<br>
+                <ul>
+                <li>99 requests: 1 ms
+                <li>1 request: 500 ms
+                </ul>
+                <br>
+                Average ≈ 6 ms<br>
+                <br>
+                Looks fine.<br>
+                <br>
+                Reality:<br><br>
+
+                <blockquote>
+                one request is catastrophically slow.
+                </blockquote>
+                <hr>
+
+                <h4>This is why percentiles matter</h4>
+
+                Instead of averages, you need distributions:
+                <ul>
+                    <li>P50 → typical case
+                    <li>P95 → high latency
+                    <li>P99 → worst-case under normal load
+                </ul>
+
+                <hr>
+                <blockquote>
+                Systems fail at the tail.<br>
+                Not at the average.
+                </blockquote>
+
+                <hr>
+
+                <h3>Microbenchmarks vs real systems</h3>
+
+                This is where confusion happens.
+
+                <h4>Microbenchmarks (JMH)</h4>
+                <ul>
+                    <li>measure isolated code
+                    <li>focus on throughput / cost per operation
+                    <li>require strict methodology
+                </ul>
+
+                <h4>Production systems</h4>
+                <ul>
+                    <li>measure latency distributions
+                    <li>care about tail behavior (P99, P999)
+                    <li>involve IO, contention, queuing
+                </ul>
+
+                <hr>
+                <blockquote>
+                A microbenchmark tells you how fast a function can run.<br>
+                A percentile tells you how your system actually behaves.
+                </blockquote>
+                <hr>
+
+                <h3>Why JMH exists</h3>
+
+                Serious benchmarking requires discipline.
+                <br><br>
+                JMH exists to enforce it:
+                <ul>
+                    <li>warmup phases
+                    <li>multiple forks
+                    <li>isolation from JVM state
+                    <li>statistical analysis
+                </ul>
+
+                <hr>
+
+                But even JMH is not magic.
+                <blockquote>
+                It reduces error.<br>
+                It does not remove the need for understanding.
+                </blockquote>
+                <hr>
+
+                <h3>The real skill</h3>
+
+                Benchmarking is not about writing code.
+                <br><br>
+                It is about asking:
+                <blockquote>
+                What am I actually measuring?
+                </blockquote>
+                And:
+                <blockquote>
+                Is this number representative of reality?
+                </blockquote>
+                <hr>
+
+                <h3>Final insight</h3>
+                <br>
+                At small scales, measurement is fragile.<br>
+                <br>
+                At system scale, measurement is incomplete.<br>
+                <br>
+                <hr>
+                <blockquote>
+                    The number is precise.<br>
+                    The system is not.
+                </blockquote>
+                <hr>
+
+                <h3>Conclusion</h3>
+
+                If you don’t understand the runtime:
+                <ul>
+                    <li>your benchmarks are misleading
+                    <li>your conclusions are fragile
+                    <li>your optimizations are often wrong
+                </ul>
+
+                <hr>
+                <blockquote>
+                    You think you are measuring code.<br>
+                    You are measuring behavior.
+                </blockquote>
+                <hr>
+
+                📩 You can reach me here: contact@lkloeble.dev
+                </p>
+
+
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
+</body>
+</html>

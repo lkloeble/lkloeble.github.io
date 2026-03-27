@@ -1,10 +1,359 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE HTML>
+<!--
+	Solid State by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+  <title>Laurent Kloeble - Java Consultant - Article : InterruptedException is not an error</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
 </head>
-<body>
-$END$
+<body class="is-preload">
+
+<!-- Page Wrapper -->
+<div id="page-wrapper">
+
+  <!-- Header -->
+  <header id="header">
+    <h1><a href="index.html">Java Consultant - Laurent Kloeble</a></h1>
+    <nav>
+      <a href="#menu">Menu</a>
+    </nav>
+  </header>
+
+  <!-- Menu -->
+  <nav id="menu">
+    <div class="inner">
+      <h2>Menu</h2>
+      <ul class="links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="technical.html">Technical</a></li>
+        <li><a href="articles.html">Articles</a></li>
+      </ul>
+      <a href="#" class="close">Close</a>
+    </div>
+  </nav>
+
+  <!-- Wrapper -->
+  <section id="wrapper">
+    <header>
+      <div class="inner">
+        <h2>InterruptedException is not an error</h2>
+        <p>
+          <blockquote>
+          InterruptedException is not an error.<br>
+          It’s how threads are asked to stop.<br>
+          And ignoring it can make your application impossible to shut down.
+          </blockquote>
+
+        </p>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="wrapper">
+      <div class="inner">
+
+        <p>
+
+        <h3>The misunderstanding</h3>
+        <br>
+        In Java, many developers treat InterruptedException as noise.<br>
+        <br>
+        They catch it… and move on.
+        <br>
+        <br>
+        <pre><code>
+        try {
+        queue.take();
+        } catch (InterruptedException e) {
+        // ignore
+        }
+        </code></pre>
+        At first glance, this looks harmless.<br>
+
+        It’s not.
+
+        <hr>
+
+        <h3>The mental model</h3>
+
+        Interruption in Java is not a failure mechanism.
+        <br>
+        It is a <b>cooperative signaling system</b>.
+        <br>
+        <blockquote>
+        Java does not stop your threads.<br>
+        It asks them to stop.
+          </blockquote>
+        There is no safe way to forcibly kill a thread.
+        <br>
+        The JVM relies on a contract:<br>
+        <br>
+        <ul>
+        <li>one thread <b>signals</b>
+        <li>another thread <b>decides how to react</b>
+        </ul>
+
+        <hr>
+
+        <h3>What actually happens when you call interrupt()</h3>
+
+        Calling:
+        <br>
+        thread.interrupt();
+        <br>
+        does not stop the thread.
+        <br>
+        It does two things:<br>
+        <br>
+        <ol>
+        <li><b>Sets an internal interruption flag</b>
+        <li><b>May trigger a reaction if the thread is blocked</b>
+        </ol>
+
+        <hr>
+
+        <h4>The interruption lifecycle</h4>
+        <pre>
+        interrupt()<br>
+        ↓<br>
+        [ flag = true ]<br>
+        ↓<br>
+        +----------------------+<br>
+        |   Thread behavior    |<br>
+        |                      |<br>
+        |   check flag → stop  |<br>
+        |           OR         |<br>
+        |   blocking call → ex |<br>
+        +----------------------+<br>
+        ↓<br>
+        InterruptedException<br>
+        ↓<br>
+        [ flag = false ]<br>
+        ↓<br>
+          </pre>
+        DEV DECIDES:<br>
+        <ul>
+        <li>restore → signal preserved
+        <li>ignore → signal lost
+        </ul>
+        <hr>
+
+        <h3>Why InterruptedException exists</h3>
+
+        This design is intentional.
+        <br>
+        Java explicitly avoids unsafe thread termination.
+        <br>
+        Older mechanisms like Thread.stop() were abandoned because they could leave the system in an inconsistent
+        state.
+        <br><br>
+        <blockquote>
+        Interruption is a compromise between control and safety.
+          </blockquote>
+        <ul>
+        <li>No forced kill
+        <li>No arbitrary suspension
+        <li>Only <b>cooperative cancellation</b>
+        </ul>
+
+        <hr>
+
+        <h3>The hidden trap</h3>
+
+        Here is the part most developers don’t know:
+        <br><br>
+        <blockquote>
+          When InterruptedException is thrown, the interruption flag is cleared.
+          </blockquote>
+
+        This is counterintuitive.
+        <br>
+        It means that this code:
+        <br><br>
+        <pre><code>
+        try {
+        queue.take();
+        } catch (InterruptedException e) {
+        // ignore
+        }
+        </code></pre>
+        does not just ignore the exception.
+
+        It <b>erases the signal</b>.
+
+        <hr>
+
+        <h3>What happens in production</h3>
+
+        When interruption signals are lost, systems don’t fail loudly.
+        <br>
+        They degrade silently.
+        <br><br>
+        <h4> 1. Applications that never shut down</h4>
+        <ul>
+          <li>threads ignore interruption
+          <li>executors don’t terminate
+          <li>shutdown hooks hang
+        </ul>
+
+        <hr>
+
+        <h4> 2. Deployments that get stuck</h4>
+        <ul>
+          <li>container waits for graceful shutdown
+          <li>timeout expires
+          <li>system falls back to kill -9
+        </ul>
+
+        <hr>
+
+        <h4> 3. Zombie threads</h4>
+        <ul>
+          <li>threads keep running in the background
+          <li>resources are never released
+          <li>system becomes harder to reason about
+        </ul>
+
+        <hr>
+
+        <blockquote>
+        Most production issues are not caused by crashes.<br>
+        They are caused by things that refuse to stop.
+          </blockquote>
+        <hr>
+
+        <h3>The contract</h3>
+
+        There is a simple rule:
+        <br><br>
+        <blockquote>
+        If you catch InterruptedException, you must not lose the signal.
+        </blockquote>
+        You have two valid options.
+
+        <hr>
+
+        <h4>Option 1 — propagate</h4>
+
+        <pre><code>
+        public void run() throws InterruptedException {
+        queue.take();
+        }
+        </code></pre>
+        <hr>
+
+        <h4>Option 2 — restore the flag</h4>
+
+        <pre><code>
+        catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        }
+        </code></pre>
+        <hr>
+
+        <h4>Anti-pattern</h4>
+
+        <pre><code>
+        catch (InterruptedException e) {
+        // ignore
+        }
+        </code></pre>
+        This breaks the contract.
+
+        <hr>
+
+        <h3>Subtleties that matter</h3>
+
+        <h4>isInterrupted() vs interrupted()</h4>
+        <ul>
+          <li>isInterrupted() → reads the flag
+          <li>interrupted() → reads <b>and clears</b> the flag
+        </ul>
+
+        <hr>
+
+        <h4>Interruption does not guarantee termination</h4>
+
+        It is only a signal.
+
+        Your code must:
+        <ul>
+          <li>check it
+          <li>respect it
+        </ul>
+
+        <hr>
+
+        <h4>Blocking vs non-blocking code</h4>
+        <ul>
+          <li>Blocking calls → react with InterruptedException
+          <li>Non-blocking code → must check the flag manually
+        </ul>
+
+        <hr>
+
+        <h3>Final insight</h3>
+
+        Java’s threading model is built on cooperation.
+
+        Not force.
+
+        Not magic.
+
+        Not safety nets.
+        <br><br>
+        <blockquote>
+        The JVM does not control your threads.<br>
+        It gives you the tools to control them.
+        </blockquote>
+        And if you ignore those tools, the system will not correct you.
+
+        It will simply… stop responding to control.
+
+        <hr>
+
+        <h3>Conclusion</h3>
+
+        InterruptedException is not about failure.
+
+        It is about control.
+
+        And when you ignore it, you are not just writing sloppy code.
+
+        You are breaking the control plane of your application.
+
+        <hr>
+        <blockquote>
+        Most systems don’t fail because something crashed.<br>
+        They fail because something refused to stop.
+          </blockquote>
+        <hr>
+
+        📩 You can reach me here: contact@lkloeble.dev
+
+        </p>
+
+
+      </div>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/browser.min.js"></script>
+<script src="assets/js/breakpoints.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
 </body>
 </html>
